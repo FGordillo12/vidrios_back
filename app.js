@@ -190,16 +190,44 @@ app.post('/api/logout', authenticateToken, (req, res) => {
 });
 
 /* ========== COTIZACIÓN ========== */
+function parseBoolCotizacion(val) {
+  if (val === true || val === 1) return true;
+  if (val === false || val === 0) return false;
+  if (typeof val === 'string') {
+    const s = val.trim().toLowerCase();
+    if (s === 'true' || s === '1' || s === 'on' || s === 'yes' || s === 'si' || s === 'sí') return true;
+    if (s === 'false' || s === '0' || s === '' || s === 'no') return false;
+  }
+  return false;
+}
+
 async function handleCotizar(req, res) {
-  let { tipo, ancho, alto, cantidad, grosor } = req.body;
+  let {
+    tipo,
+    ancho,
+    alto,
+    cantidad,
+    grosor,
+    vidrioPulido,
+    vidrioSandblasteado,
+    sandblastValor
+  } = req.body;
 
   tipo = (tipo || '').trim().toLowerCase();
   ancho = parseFloat(ancho);
   alto = parseFloat(alto);
   cantidad = parseInt(cantidad, 10);
 
+  const pulido = parseBoolCotizacion(vidrioPulido);
+  const sandblast = parseBoolCotizacion(vidrioSandblasteado);
+  const sandblastNum = Math.max(0, parseFloat(sandblastValor) || 0);
+
   if (!tipo || Number.isNaN(ancho) || Number.isNaN(alto) || Number.isNaN(cantidad) || grosor === undefined) {
     return res.status(400).json({ error: 'Faltan datos o datos inválidos' });
+  }
+
+  if (sandblast && sandblastNum <= 0) {
+    return res.status(400).json({ error: 'Indique el valor adicional del sandblast (COP) para este ítem' });
   }
 
   try {
@@ -218,9 +246,26 @@ async function handleCotizar(req, res) {
     }
 
     const area = ancho * alto;
-    const total = area * precioUnit * cantidad;
+    const totalVidrio = area * precioUnit * cantidad;
 
-    res.json({ total, area, tipo, grosor, precio: precioUnit });
+    const precioPulidoM2 = Number(process.env.PRECIO_PULIDO_COP_M2 || 15000);
+    const pulidoExtra = pulido ? area * cantidad * precioPulidoM2 : 0;
+    const sandblastExtra = sandblast ? sandblastNum : 0;
+
+    const total = totalVidrio + pulidoExtra + sandblastExtra;
+
+    res.json({
+      total,
+      area,
+      tipo,
+      grosor,
+      precio: precioUnit,
+      totalVidrio,
+      pulidoExtra,
+      sandblastExtra,
+      vidrioPulido: pulido,
+      vidrioSandblasteado: sandblast
+    });
   } catch (error) {
     console.error('Error al cotizar:', error.message);
     res.status(500).json({ error: 'Error al calcular la cotización' });
@@ -283,16 +328,21 @@ app.get('/api/obtener-precios', async (req, res) => {
 
 function cotizacionesHtmlTable(cotizaciones, total) {
   const rows = cotizaciones
-    .map(
-      (item) => `
+    .map((item) => {
+      const partesAcabado = [];
+      if (item.vidrioPulido) partesAcabado.push(`Pulido +${formatCop(Number(item.pulidoExtra) || 0)}`);
+      if (item.vidrioSandblasteado) partesAcabado.push(`Sandblast +${formatCop(Number(item.sandblastExtra) || 0)}`);
+      const acabados = partesAcabado.length ? partesAcabado.join(' · ') : '—';
+
+      return `
     <tr>
-      <td style="padding:8px;border:1px solid #ccc;">${escapeHtml(String(item.tipo || ''))}</td>
+      <td style="padding:8px;border:1px solid #ccc;">${escapeHtml(String(item.tipo || ''))}<br><span style="font-size:11px;color:#555;">${escapeHtml(acabados)}</span></td>
       <td style="padding:8px;border:1px solid #ccc;">${escapeHtml(String(item.grosor || ''))} mm</td>
       <td style="padding:8px;border:1px solid #ccc;">${escapeHtml(String(item.anchoOriginal ?? item.ancho))}m × ${escapeHtml(String(item.altoOriginal ?? item.alto))}m</td>
       <td style="padding:8px;border:1px solid #ccc;text-align:center;">${escapeHtml(String(item.cantidad))}</td>
       <td style="padding:8px;border:1px solid #ccc;text-align:right;">${formatCop(item.total)}</td>
-    </tr>`
-    )
+    </tr>`;
+    })
     .join('');
   return `
   <table style="border-collapse:collapse;width:100%;max-width:640px;font-family:Arial,sans-serif;">
