@@ -5,16 +5,22 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node --watch server.js",
-    "seed:precios": "node scripts/seed-precios.js"
+    "seed:precios": "node scripts/seed-precios.js",
+    "seed:admin": "node scripts/seed-admin.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "express-mongo-sanitize": "^2.2.0",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.16.0",
-    "nodemailer": "^7.0.3",
-    "serverless-http": "^3.2.0"
+    "nodemailer": "^10.0.13",
+    "serverless-http": "^3.2.0",
+    "zod": "^4.6.5"
   }
 }
