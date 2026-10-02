@@ -273,6 +273,9 @@ app.post('/api/register', authLimiter, async (req, res) => {
       password: passwordSchema
     }).strict().safeParse(req.body);
     if (!input.success) return res.status(400).json({ error: input.error.issues[0]?.message || 'Datos de registro inválidos' });
+    if ((process.env.JWT_SECRET || '').length < 32) {
+      return res.status(503).json({ error: 'El registro no está configurado: define un JWT_SECRET de al menos 32 caracteres en vidrios_back/.env y reinicia el backend.' });
+    }
     const { username, email, password } = input.data;
     const existingUser = await User.findOne({ $or: [{ username: { $regex: `^${username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } }, { email }] });
     if (existingUser) {
