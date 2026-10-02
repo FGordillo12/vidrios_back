@@ -31,6 +31,16 @@ async function connectDb() {
             console.log('Semilla automática: precios iniciales cargados (BD vacía)');
           }
         }
+        const shouldSeedCatalog = process.env.AUTO_SEED_CATALOGO === '1' || (!isVercel && process.env.AUTO_SEED_CATALOGO !== '0');
+        if (shouldSeedCatalog) {
+          const Glass = require('./models/Glass');
+          const { seedCatalogo } = require('./lib/seedCatalogo');
+          const count = await Glass.countDocuments();
+          if (count === 0) {
+            await seedCatalogo(Glass);
+            console.log('Semilla automática: catálogo de vidrios cargado (BD vacía)');
+          }
+        }
         return mongoose.connection;
       })
       .catch((err) => {
