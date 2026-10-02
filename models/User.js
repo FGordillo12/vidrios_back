@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true, select: false },
   role: { type: String, enum: ['admin', 'user'], default: 'user', index: true },
   active: { type: Boolean, default: true, index: true },
+  approvalStatus: { type: String, enum: ['pending', 'approved', 'disabled'], default: 'approved', index: true },
   failedLoginAttempts: { type: Number, default: 0, select: false },
   lockUntil: { type: Date, default: null, select: false },
   createdAt: { type: Date, default: Date.now }

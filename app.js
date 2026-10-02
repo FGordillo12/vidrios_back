@@ -282,15 +282,15 @@ app.post('/api/register', authLimiter, async (req, res) => {
       return res.status(400).json({ error: 'El usuario o email ya está registrado' });
     }
 
-    const newUser = new User({ username, email, password, role: 'user' });
+    const newUser = new User({ username, email, password, role: 'user', active: false, approvalStatus: 'pending' });
     await newUser.save();
-    await createSession(newUser, res);
 
-    res.status(201).json({
-      message: 'Usuario registrado exitosamente',
+    res.status(202).json({
+      code: 'ACCOUNT_PENDING',
+      message: 'Tu solicitud fue recibida y está pendiente de aprobación por un administrador.',
       username: newUser.username,
       role: newUser.role,
-      redirect: '/index.html'
+      redirect: '/auth/pendiente.html'
     });
   } catch (error) {
     if (error?.code === 11000) return res.status(409).json({ error: 'El usuario o email ya está registrado' });
@@ -305,12 +305,18 @@ app.post('/api/login', authLimiter, async (req, res) => {
     if (!input.success) return res.status(400).json({ error: 'Correo o contraseña inválidos' });
     const { email, password } = input.data;
     const user = await User.findOne({ email }).select('+password +failedLoginAttempts +lockUntil');
-    if (!user || !user.active) return res.status(401).json({ error: 'Credenciales inválidas' });
+    if (!user) return res.status(401).json({ error: 'Credenciales inválidas' });
     if (user.lockUntil && user.lockUntil > new Date()) return res.status(429).json({ error: 'Cuenta bloqueada temporalmente por intentos fallidos' });
     if (!(await user.comparePassword(password))) {
       const attempts = user.lockUntil && user.lockUntil <= new Date() ? 1 : user.failedLoginAttempts + 1;
       await User.updateOne({ _id: user._id }, { $set: { failedLoginAttempts: attempts, lockUntil: attempts >= 5 ? new Date(Date.now() + 15 * 60 * 1000) : null } });
       return res.status(401).json({ error: 'Credenciales inválidas' });
+    }
+    if (user.approvalStatus === 'pending') {
+      return res.status(403).json({ code: 'ACCOUNT_PENDING', error: 'Tu cuenta está pendiente de aprobación por un administrador.', redirect: '/auth/pendiente.html' });
+    }
+    if (!user.active || user.approvalStatus === 'disabled') {
+      return res.status(403).json({ code: 'ACCOUNT_DISABLED', error: 'Esta cuenta está desactivada. Contacta a un administrador.' });
     }
     await User.updateOne({ _id: user._id }, { $set: { failedLoginAttempts: 0, lockUntil: null } });
     await createSession(user, res);
@@ -361,7 +367,7 @@ app.post('/api/logout', async (req, res) => {
 });
 
 app.get('/api/admin/users', authenticateToken, requireRole('admin'), async (req, res) => {
-  const users = await User.find().select('username email role active createdAt').sort({ createdAt: -1 }).lean();
+  const users = await User.find().select('username email role active approvalStatus createdAt').sort({ createdAt: -1 }).lean();
   res.json(users);
 });
 
@@ -525,7 +531,10 @@ app.patch('/api/admin/users/:id', authenticateToken, requireRole('admin'), async
   if (!input.success || Object.keys(input.data || {}).length === 0) return res.status(400).json({ error: 'Cambios de usuario inválidos' });
   if (userId.data === req.user._id.toString() && (input.data.active === false || input.data.role === 'user')) return res.status(400).json({ error: 'No puedes quitarte el acceso de administrador a ti mismo' });
   try {
-    const user = await User.findByIdAndUpdate(userId.data, { $set: input.data }, { new: true, runValidators: true }).select('username email role active createdAt');
+    const changes = { ...input.data };
+    if (changes.active === true) changes.approvalStatus = 'approved';
+    if (changes.active === false) changes.approvalStatus = 'disabled';
+    const user = await User.findByIdAndUpdate(userId.data, { $set: changes }, { new: true, runValidators: true }).select('username email role active approvalStatus createdAt');
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
     if (input.data.active === false || input.data.role === 'user') await RefreshToken.deleteMany({ userId: user._id });
     res.json(user);

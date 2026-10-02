@@ -17,10 +17,11 @@ async function seedAdmin() {
   if (user) {
     user.role = 'admin';
     user.active = true;
+    user.approvalStatus = 'approved';
     await user.save();
     console.log('Rol administrador asignado a la cuenta configurada.');
   } else {
-    await User.create({ username: ADMIN_USERNAME.trim(), email, password: ADMIN_PASSWORD, role: 'admin', active: true });
+    await User.create({ username: ADMIN_USERNAME.trim(), email, password: ADMIN_PASSWORD, role: 'admin', active: true, approvalStatus: 'approved' });
     console.log('Cuenta administrador creada.');
   }
 }
