@@ -496,8 +496,11 @@ app.post('/api/cotizaciones', authenticateToken, async (req, res) => {
       const glass = await Glass.findOne({ tipo: mapped.tipo, variante: mapped.variante, grosorMm: mapped.grosorMm, activo: true }).lean();
       if (!glass || glass.precioM2 <= 0) return res.status(400).json({ error: `El precio de ${item.tipo} ${item.grosor} aún no está disponible` });
       const factor = item.unidad === 'cm' ? 0.01 : item.unidad === 'mm' ? 0.001 : 1;
-      const realM2 = item.ancho * factor * item.alto * factor;
-      const billedM2 = Math.max(realM2, minM2) * item.cantidad;
+      const anchoM = item.ancho * factor;
+      const altoM = item.alto * factor;
+      const realM2 = anchoM * altoM;
+      const areaAproximada = aproximarMedidaFacturable(anchoM) * aproximarMedidaFacturable(altoM);
+      const billedM2 = Math.max(areaAproximada, minM2) * item.cantidad;
       const vidrio = billedM2 * glass.precioM2;
       const pulido = item.vidrioPulido ? billedM2 * Number(process.env.PRECIO_PULIDO_COP_M2 || 15000) : 0;
       const sandblast = item.vidrioSandblasteado ? Number(item.sandblastExtra) || 0 : 0;
@@ -578,6 +581,10 @@ function parseBoolCotizacion(val) {
   return false;
 }
 
+function aproximarMedidaFacturable(metros) {
+  return Math.ceil((metros * 10) - 1e-10) / 10;
+}
+
 async function handleCotizar(req, res) {
   let {
     tipo,
@@ -631,9 +638,10 @@ async function handleCotizar(req, res) {
     }
 
     const areaReal = ancho * alto;
+    const areaAproximada = aproximarMedidaFacturable(ancho) * aproximarMedidaFacturable(alto);
     const savedSettings = await QuoteSetting.findOne({ key: 'default' }).lean();
     const minM2 = savedSettings?.minM2 ?? Number(process.env.MIN_M2 || 0);
-    const area = Math.max(areaReal, minM2);
+    const area = Math.max(areaAproximada, minM2);
     const totalVidrio = area * precioUnit * cantidad;
 
     const precioPulidoM2 = Number(process.env.PRECIO_PULIDO_COP_M2 || 15000);
