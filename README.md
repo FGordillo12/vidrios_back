@@ -11,6 +11,8 @@
 
 Para el clúster mostrado en la captura, configurar en `.env` la URI con este formato: `mongodb+srv://vidriosalejoseguridad_db_user:<PASSWORD_URL_ENCODED>@cluster0.uf6ruxb.mongodb.net/vidrios_alejo?retryWrites=true&w=majority&appName=Cluster0`. Reemplazar el marcador por la contraseña del usuario de base de datos y codificar caracteres especiales de URL; habilitar la IP de desarrollo en Atlas → **Network Access**. No pegar credenciales en el frontend ni en el repositorio; `.env` está excluido por `.gitignore`. Reiniciar el backend después de cambiarlo. `GET /api/health` confirma tanto la API como la conexión a la base.
 
+Los precios antiguos de `precios_vidrios` se migran al campo `glasses.precioM2` con `npm run sync:precios-catalogo`. Para revisar el plan sin modificar la base, usar `npm run preview:sync-precios-catalogo`. Los cambios hechos desde el catálogo actualizan también la colección antigua para mantener compatibilidad con las rutas de precios anteriores.
+
 Las cotizaciones se guardan con consecutivo `COT-####`; los datos del cliente se cifran con `ENC_KEY` (64 caracteres hexadecimales, no se debe cambiar después de almacenar cotizaciones). El área mínima facturable por pieza parte de `MIN_M2` y puede ajustarse desde Catálogo de vidrios como administrador.
 
 Desde Catálogo de vidrios también se editan los datos comerciales que se imprimen en el PDF (razón social, NIT, dirección, contacto, vigencia predeterminada y condiciones de pago). El historial permite a los usuarios consultar sus propias cotizaciones y al administrador actualizar su estado. Al enviar una cotización por correo, su estado pasa a `enviada`.

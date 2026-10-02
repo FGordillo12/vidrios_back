@@ -21,6 +21,7 @@ const { encryptField, decryptField } = require('./lib/crypto');
 const PasswordResetToken = require('./models/PasswordResetToken');
 const RefreshToken = require('./models/RefreshToken');
 const { obtenerPrecioFallback } = require('./data/preciosIniciales');
+const { mapLegacyPrice, mapCatalogPrice } = require('./lib/catalogPriceMap');
 
 const app = express();
 const isVercel = process.env.VERCEL === '1';
@@ -379,6 +380,26 @@ const glassInputSchema = z.object({
   activo: z.boolean().default(true)
 }).strict();
 
+async function saveLegacyPriceToCatalog(tipo, grosor, valor) {
+  const key = mapLegacyPrice(tipo, grosor);
+  if (!key) return;
+  await Glass.findOneAndUpdate(
+    key,
+    { $set: { precioM2: valor }, $setOnInsert: { activo: true } },
+    { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+  );
+}
+
+async function saveCatalogPriceToLegacy(glass) {
+  const key = mapCatalogPrice(glass);
+  if (!key) return;
+  await Precio.findOneAndUpdate(
+    key,
+    { $set: { ...key, valor: glass.precioM2 } },
+    { upsert: true, new: true, runValidators: true }
+  );
+}
+
 app.get('/api/catalogo', authenticateToken, async (req, res) => {
   const includeInactive = req.query.todos === '1';
   if (includeInactive && req.user.role !== 'admin') return res.status(403).json({ error: 'No tienes permisos para ver registros desactivados' });
@@ -392,6 +413,7 @@ app.post('/api/admin/catalogo', authenticateToken, requireRole('admin'), async (
   if (!input.success) return res.status(400).json({ error: input.error.issues[0]?.message || 'Datos del vidrio inválidos' });
   try {
     const glass = await Glass.create(input.data);
+    await saveCatalogPriceToLegacy(glass);
     res.status(201).json(glass);
   } catch (error) {
     if (error?.code === 11000) return res.status(409).json({ error: 'Ya existe esa combinación de tipo, variante y grosor' });
@@ -407,6 +429,7 @@ app.patch('/api/admin/catalogo/:id', authenticateToken, requireRole('admin'), as
   try {
     const glass = await Glass.findByIdAndUpdate(id.data, { $set: input.data }, { new: true, runValidators: true });
     if (!glass) return res.status(404).json({ error: 'Combinación de vidrio no encontrada' });
+    if (Object.hasOwn(input.data, 'precioM2')) await saveCatalogPriceToLegacy(glass);
     res.json(glass);
   } catch (error) {
     if (error?.code === 11000) return res.status(409).json({ error: 'Ya existe esa combinación de tipo, variante y grosor' });
@@ -660,6 +683,7 @@ app.post('/api/editar-precios', authenticateToken, requireRole('admin'), async (
           { valor, tipo: tipoNormalizado, grosor: grosorNormalizado },
           { upsert: true, new: true }
         );
+        await saveLegacyPriceToCatalog(tipoNormalizado, grosorNormalizado, valor);
       }
     }
 

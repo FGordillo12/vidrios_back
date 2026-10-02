@@ -7,7 +7,9 @@
     "start": "node --watch server.js",
     "seed:precios": "node scripts/seed-precios.js",
     "seed:catalogo": "node scripts/seed-catalogo.js",
-    "seed:admin": "node scripts/seed-admin.js"
+    "seed:admin": "node scripts/seed-admin.js",
+    "preview:sync-precios-catalogo": "node scripts/sync-catalog-prices.js",
+    "sync:precios-catalogo": "node scripts/sync-catalog-prices.js --apply"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
