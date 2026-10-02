@@ -1,16 +1,16 @@
-const mongoose = require('mongoose');
+require('./load-env')();
+const { connectDb, mongoose } = require('./db');
 
-const connectionDb = async () => {
+async function checkConnection() {
   try {
-    const connectDb = await mongoose.connect("mongodb+srv://vidriosalejoseguridad_db_user:FOLou86nyuNu8Wd8@cluster0.uf6ruxb.mongodb.net/vidrios_alejo?appName=Cluster0");
-    
-    console.log(
-      'Connection established',
-      '\nnombre DB:', connectDb.connection.name
-    );
-  } catch (err) {
-    console.log('Fallo en la conexion: ' + err);
+    await connectDb();
+    console.log('Conexión establecida. Base de datos:', mongoose.connection.name);
+  } catch (error) {
+    console.error('No se pudo conectar a MongoDB:', error.message);
+    process.exitCode = 1;
+  } finally {
+    if (mongoose.connection.readyState) await mongoose.disconnect();
   }
-};
-connectionDb();
-module.exports = { connectionDb };
+}
+
+checkConnection();

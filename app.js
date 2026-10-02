@@ -104,7 +104,17 @@ app.get('/api/health', async (req, res) => {
     res.json({ ok: true, database: 'connected' });
   } catch (err) {
     console.error('DB health check:', err.name || 'Error');
-    res.status(503).json({ ok: false, database: 'disconnected', code: process.env.MONGODB_URI ? 'DATABASE_UNAVAILABLE' : 'DATABASE_CONFIG_MISSING', error: process.env.MONGODB_URI ? 'MongoDB no responde. Comprueba la URI, red y lista de acceso de Atlas.' : 'Configura MONGODB_URI en vidrios_back/.env.' });
+    const authFailed = err.code === 8000 || /bad auth|authentication failed/i.test(err.message || '');
+    res.status(503).json({
+      ok: false,
+      database: 'disconnected',
+      code: !process.env.MONGODB_URI ? 'DATABASE_CONFIG_MISSING' : authFailed ? 'DATABASE_AUTH_FAILED' : 'DATABASE_UNAVAILABLE',
+      error: !process.env.MONGODB_URI
+        ? 'Configura MONGODB_URI en vidrios_back/.env.'
+        : authFailed
+          ? 'Atlas rechazó las credenciales. Comprueba la contraseña vigente del usuario de base de datos y codifica caracteres especiales en la URI.'
+          : 'MongoDB no responde. Comprueba la URI, la red y la lista de acceso de Atlas.'
+    });
   }
 });
 
@@ -122,7 +132,13 @@ async function ensureDbConnection(req, res, next) {
     if (!process.env.MONGODB_URI) {
       return res.status(503).json({ code: 'DATABASE_CONFIG_MISSING', error: 'Falta configurar MONGODB_URI en vidrios_back/.env.' });
     }
-    res.status(503).json({ code: 'DATABASE_UNAVAILABLE', error: 'No hay conexión con MongoDB. Inicia la base local o verifica la URI y el acceso de red.' });
+    const authFailed = err.code === 8000 || /bad auth|authentication failed/i.test(err.message || '');
+    res.status(503).json({
+      code: authFailed ? 'DATABASE_AUTH_FAILED' : 'DATABASE_UNAVAILABLE',
+      error: authFailed
+        ? 'Atlas rechazó las credenciales. Comprueba la contraseña vigente del usuario de base de datos y codifica caracteres especiales en la URI.'
+        : 'No hay conexión con MongoDB. Verifica la URI y el acceso de red.'
+    });
   }
 }
 
