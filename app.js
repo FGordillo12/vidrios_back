@@ -97,9 +97,15 @@ app.get('/', (req, res) => {
   res.json({message: "El servidor de vidrios está funcionando"});
 });
 
-// Health endpoint: responde sin depender de la base de datos.
-app.get('/api/health', (req, res) => {
-  res.json({ ok: true });
+// Permite distinguir el servidor activo de una base de datos desconectada.
+app.get('/api/health', async (req, res) => {
+  try {
+    await connectDb();
+    res.json({ ok: true, database: 'connected' });
+  } catch (err) {
+    console.error('DB health check:', err.name || 'Error');
+    res.status(503).json({ ok: false, database: 'disconnected', code: process.env.MONGODB_URI ? 'DATABASE_UNAVAILABLE' : 'DATABASE_CONFIG_MISSING', error: process.env.MONGODB_URI ? 'MongoDB no responde. Comprueba la URI, red y lista de acceso de Atlas.' : 'Configura MONGODB_URI en vidrios_back/.env.' });
+  }
 });
 
 async function ensureDbConnection(req, res, next) {
@@ -113,7 +119,10 @@ async function ensureDbConnection(req, res, next) {
     next();
   } catch (err) {
     console.error('DB connection error:', err.name || 'Error');
-    res.status(503).json({ error: 'Servicio temporalmente no disponible' });
+    if (!process.env.MONGODB_URI) {
+      return res.status(503).json({ code: 'DATABASE_CONFIG_MISSING', error: 'Falta configurar MONGODB_URI en vidrios_back/.env.' });
+    }
+    res.status(503).json({ code: 'DATABASE_UNAVAILABLE', error: 'No hay conexión con MongoDB. Inicia la base local o verifica la URI y el acceso de red.' });
   }
 }
 
